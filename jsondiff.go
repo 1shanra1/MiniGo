@@ -8,24 +8,6 @@ import (
 	"strings"
 )
 
-type UserInfo struct {
-	Id    int
-	Email string
-}
-
-type UserList struct {
-	Users []UserInfo
-}
-
-func constructMap(ul UserList) map[int]string {
-	m := make(map[int]string)
-	for _, user := range ul.Users {
-		m[user.Id] = user.Email
-	}
-
-	return m
-}
-
 type Change struct {
 	Path     string
 	OldValue any
