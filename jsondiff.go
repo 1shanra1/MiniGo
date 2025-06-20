@@ -17,12 +17,6 @@ type UserList struct {
 	Users []UserInfo
 }
 
-func errCheck(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
 func constructMap(ul UserList) map[int]string {
 	m := make(map[int]string)
 	for _, user := range ul.Users {
@@ -30,40 +24,6 @@ func constructMap(ul UserList) map[int]string {
 	}
 
 	return m
-}
-
-func diffCheck(old, new []byte) []int {
-	var oldUsers, newUsers UserList
-	var deletedList, addedList, modifiedList []int // store the index of the modified field this way.
-
-	oldErr := json.Unmarshal(old, &oldUsers)
-	newErr := json.Unmarshal(new, &newUsers)
-
-	errCheck(oldErr)
-	errCheck(newErr)
-
-	oldMap := constructMap(oldUsers)
-	newMap := constructMap(newUsers)
-
-	for oldId, oldEmail := range oldMap {
-		newEmail, ok := newMap[oldId]
-		if ok {
-			if !(newEmail == oldEmail) {
-				modifiedList = append(modifiedList, oldId)
-			}
-		} else {
-			deletedList = append(deletedList, oldId)
-		}
-	}
-
-	for newId := range newMap {
-		_, ok := oldMap[newId]
-		if !ok {
-			addedList = append(addedList, newId)
-		}
-	}
-
-	return addedList
 }
 
 type Change struct {
@@ -90,7 +50,7 @@ func recursiveDiffCheck(old, new any, added, modified, deleted *[]Change, curren
 					}
 				} else {
 					fullPath := strings.Join(newPath, ".")
-					*deleted = append(*deleted, Change{Path: fullPath, OldValue: oldValue, NewValue: newValue})
+					*deleted = append(*deleted, Change{Path: fullPath, OldValue: oldValue, NewValue: nil})
 				}
 			}
 
@@ -110,41 +70,125 @@ func recursiveDiffCheck(old, new any, added, modified, deleted *[]Change, curren
 			fullPath := strings.Join(currentPath, ".")
 			*modified = append(*modified, Change{Path: fullPath, OldValue: t, NewValue: newValue})
 		} else {
-			if len(t) > len(newValue) {
+			if len(t) >= len(newValue) {
 				for newSliceIndex, newSliceValue := range newValue {
 					if !reflect.DeepEqual(newSliceValue, t[newSliceIndex]) {
 						newPath := append(currentPath, fmt.Sprintf("[%d]", newSliceIndex))
 						recursiveDiffCheck(t[newSliceIndex], newSliceValue, added, modified, deleted, newPath)
 					}
 				}
-				// What about the rest?
 				for i := len(newValue); i < len(t); i++ {
 					newPath := append(currentPath, fmt.Sprintf("[%d]", i))
 					finalPath := strings.Join(newPath, ".")
 					*deleted = append(*deleted, Change{Path: finalPath, OldValue: t[i], NewValue: nil})
 				}
+			} else {
+				for oldSliceIndex, oldSliceValue := range t {
+					if !reflect.DeepEqual(oldSliceValue, newValue[oldSliceIndex]) {
+						newPath := append(currentPath, fmt.Sprintf("[%d]", oldSliceIndex))
+						recursiveDiffCheck(oldSliceValue, newValue[oldSliceIndex], added, modified, deleted, newPath)
+					}
+				}
+				for i := len(t); i < len(newValue); i++ {
+					newPath := append(currentPath, fmt.Sprintf("[%d]", i))
+					finalPath := strings.Join(newPath, ".")
+					*added = append(*added, Change{Path: finalPath, OldValue: nil, NewValue: newValue[i]})
+				}
 			}
 		}
-	case string:
-		return nil
-	case bool:
-		return nil
-	case float64:
-		return nil
+	case string, bool, float64:
+		if !reflect.DeepEqual(old, new) {
+			fullPath := strings.Join(currentPath, ".")
+			*modified = append(*modified, Change{Path: fullPath, OldValue: old, NewValue: new})
+		}
 	case nil:
-		return nil
+		if new != nil {
+			fullPath := strings.Join(currentPath, ".")
+			*modified = append(*modified, Change{Path: fullPath, OldValue: nil, NewValue: new})
+		}
+	default:
+		if !reflect.DeepEqual(old, new) {
+			fullPath := strings.Join(currentPath, ".")
+			*modified = append(*modified, Change{Path: fullPath, OldValue: old, NewValue: new})
+		}
+		fmt.Printf("Unhandled type for old value at path %s: %T\n", strings.Join(currentPath, "."), t) // Debugging
 	}
 
 	return nil
 }
 
 func main() {
-	var oldJson, newJson any // using generic interfaces
-	old_json_data, _ := os.ReadFile("old.json")
-	new_json_data, _ := os.ReadFile("new.json")
+	// 1. Initialize the slices to hold the diff results
+	var addedChanges []Change // Declared as actual slices, not nil pointers
+	var modifiedChanges []Change
+	var deletedChanges []Change
 
-	json.Unmarshal(old_json_data, &oldJson)
-	json.Unmarshal(new_json_data, newJson)
+	// currentPath for the initial call, an empty slice is perfect for the root
+	var currentPath []string
 
-	fmt.Printf("%v", oldJson)
+	// 2. Read JSON data from files
+	oldJsonData, err := os.ReadFile("old.json")
+	if err != nil {
+		fmt.Printf("Error reading old.json: %v\n", err)
+		os.Exit(1) // Exit if file cannot be read
+	}
+
+	newJsonData, err := os.ReadFile("new.json")
+	if err != nil {
+		fmt.Printf("Error reading new.json: %v\n", err)
+		os.Exit(1) // Exit if file cannot be read
+	}
+
+	// 3. Unmarshal JSON data into generic interfaces
+	var oldJson, newJson any // Using generic interfaces to hold parsed JSON
+	err = json.Unmarshal(oldJsonData, &oldJson)
+	if err != nil {
+		fmt.Printf("Error unmarshaling old.json: %v\n", err)
+		os.Exit(1) // Exit if JSON is invalid
+	}
+
+	err = json.Unmarshal(newJsonData, &newJson)
+	if err != nil {
+		fmt.Printf("Error unmarshaling new.json: %v\n", err)
+		os.Exit(1) // Exit if JSON is invalid
+	}
+
+	// 4. Call the recursive diff checker
+	// Pass the ADDRESS of the slices so the function can modify them directly
+	fmt.Println("Performing JSON diff...")
+	err = recursiveDiffCheck(oldJson, newJson, &addedChanges, &modifiedChanges, &deletedChanges, currentPath)
+	if err != nil {
+		fmt.Printf("Error during diff check: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 5. Print the results
+	fmt.Println("\n--- Added Changes ---")
+	if len(addedChanges) == 0 {
+		fmt.Println("No additions found.")
+	} else {
+		for _, change := range addedChanges {
+			fmt.Printf("  Path: %s, New Value: %+v\n", change.Path, change.NewValue)
+		}
+	}
+
+	fmt.Println("\n--- Modified Changes ---")
+	if len(modifiedChanges) == 0 {
+		fmt.Println("No modifications found.")
+	} else {
+		for _, change := range modifiedChanges {
+			fmt.Printf("  Path: %s, Old Value: %+v, New Value: %+v\n", change.Path, change.OldValue, change.NewValue)
+		}
+	}
+
+	fmt.Println("\n--- Deleted Changes ---")
+	if len(deletedChanges) == 0 {
+		fmt.Println("No deletions found.")
+	} else {
+		for _, change := range deletedChanges {
+			fmt.Printf("  Path: %s, Old Value: %+v\n", change.Path, change.OldValue)
+		}
+	}
+
+	fmt.Println("\nDiff complete.")
 }

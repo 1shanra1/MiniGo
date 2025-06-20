@@ -1,7 +1,6 @@
 {
     "users": [
         {"id": 1, "email": "hello@google.com"},
-        {"id": 2, "email": "xyz@google.com"},
         {"id": 3, "email": "why@google.com"},
         {"id": 4, "email": "why@google.com"}
     ]
