@@ -72,7 +72,6 @@ type Change struct {
 	NewValue any
 }
 
-// Implementation first, optimization next
 func recursiveDiffCheck(old, new any, added, modified, deleted *[]Change, currentPath []string) error {
 	switch t := old.(type) {
 	case map[string]any:
@@ -112,7 +111,18 @@ func recursiveDiffCheck(old, new any, added, modified, deleted *[]Change, curren
 			*modified = append(*modified, Change{Path: fullPath, OldValue: t, NewValue: newValue})
 		} else {
 			if len(t) > len(newValue) {
-
+				for newSliceIndex, newSliceValue := range newValue {
+					if !reflect.DeepEqual(newSliceValue, t[newSliceIndex]) {
+						newPath := append(currentPath, fmt.Sprintf("[%d]", newSliceIndex))
+						recursiveDiffCheck(t[newSliceIndex], newSliceValue, added, modified, deleted, newPath)
+					}
+				}
+				// What about the rest?
+				for i := len(newValue); i < len(t); i++ {
+					newPath := append(currentPath, fmt.Sprintf("[%d]", i))
+					finalPath := strings.Join(newPath, ".")
+					*deleted = append(*deleted, Change{Path: finalPath, OldValue: t[i], NewValue: nil})
+				}
 			}
 		}
 	case string:
@@ -138,8 +148,3 @@ func main() {
 
 	fmt.Printf("%v", oldJson)
 }
-
-// this works for this specific struct but we're interested in tracking changes in any kind of general json structure
-// How do we do this?
-
-// Different comparison logic depending on values held by the types. But how do I recurse? What does the function signature look liek for that?
