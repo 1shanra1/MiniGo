@@ -14,7 +14,7 @@ type Change struct {
 	NewValue any
 }
 
-func recursiveDiffCheck(old, new any, added, modified, deleted *[]Change, currentPath []string) error {
+func recursiveDiffCheck(old, new any, added, modified, deleted *[]Change, currentPath []string) {
 	switch t := old.(type) {
 	case map[string]any:
 		nt, ok := new.(map[string]any)
@@ -95,8 +95,6 @@ func recursiveDiffCheck(old, new any, added, modified, deleted *[]Change, curren
 		}
 		fmt.Printf("Unhandled type for old value at path %s: %T\n", strings.Join(currentPath, "."), t) // Debugging
 	}
-
-	return nil
 }
 
 func main() {
@@ -138,7 +136,7 @@ func main() {
 	// 4. Call the recursive diff checker
 	// Pass the ADDRESS of the slices so the function can modify them directly
 	fmt.Println("Performing JSON diff...")
-	err = recursiveDiffCheck(oldJson, newJson, &addedChanges, &modifiedChanges, &deletedChanges, currentPath)
+	recursiveDiffCheck(oldJson, newJson, &addedChanges, &modifiedChanges, &deletedChanges, currentPath)
 	if err != nil {
 		fmt.Printf("Error during diff check: %v\n", err)
 		os.Exit(1)
