@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 )
 
@@ -41,8 +42,33 @@ func extractAbsoluteTags(b []byte) []string {
 	return urls
 }
 
+// Here I need to make sure that it is only links related to the same website that I care about
+func filterAndResolveTags(baseUrl string, urls []string) ([]*url.URL, error) {
+	var resolvedUrls []*url.URL
+
+	base, err := url.Parse(baseUrl)
+	if err != nil {
+		return nil, fmt.Errorf("Error with parsing: %w", err)
+	}
+
+	for _, urlString := range urls {
+		parsed, err := url.Parse(urlString)
+		if err != nil {
+			return nil, fmt.Errorf("Error with parsing: %w", err)
+		}
+		resolved := base.ResolveReference(parsed)
+		if resolved.Host == base.Host {
+			resolvedUrls = append(resolvedUrls, resolved)
+		}
+	}
+
+	return resolvedUrls, nil
+}
+
 func main() {
-	url := "http://www.example.com"
+	url := "https://www.apple.com"
 	body := getHttpContent(url)
-	fmt.Printf("%s", body)
+	absoluteTags := extractAbsoluteTags(body)
+	filteredTags, _ := filterAndResolveTags(url, absoluteTags)
+	fmt.Printf("%v", filteredTags[1].Host)
 }
