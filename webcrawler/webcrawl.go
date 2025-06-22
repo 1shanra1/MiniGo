@@ -5,10 +5,11 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 )
 
-func main() {
-	res, err := http.Get("http://example.com")
+func getHttpContent(url string) []byte {
+	res, err := http.Get(url)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -20,5 +21,28 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	return body
+}
+
+func extractAbsoluteTags(b []byte) []string {
+	r := regexp.MustCompile(`<a\s+.*?href\s*=\s*['"]([^'"]+)['"]`)
+
+	matches := r.FindAllSubmatch(b, -1)
+
+	var urls []string
+
+	for _, match := range matches {
+		if len(match) > 1 {
+			urls = append(urls, string(match[1]))
+		}
+	}
+
+	return urls
+}
+
+func main() {
+	url := "http://www.example.com"
+	body := getHttpContent(url)
 	fmt.Printf("%s", body)
 }
