@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -33,10 +35,17 @@ func main() {
 		}
 	}()
 
-	err = watcher.Add("/mdfiles")
+	currentDir, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	<-make(chan struct{}) // why is this necessary
+	mdFilesPath := filepath.Join(currentDir, "mdfiles")
+
+	err = watcher.Add(mdFilesPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	<-make(chan struct{}) // blocks main goroutine indefinitely
 }
