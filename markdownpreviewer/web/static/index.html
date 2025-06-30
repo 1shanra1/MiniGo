@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Markdown Preview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Basic styling for rendered markdown content */
+        #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 {
+            font-weight: 600;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            line-height: 1.2;
+        }
+        #preview h1 { font-size: 2.25em; }
+        #preview h2 { font-size: 1.75em; border-bottom: 1px solid #e2e8f0; padding-bottom: .3em;}
+        #preview h3 { font-size: 1.5em; }
+        #preview p { margin-bottom: 1em; line-height: 1.6; }
+        #preview ul, #preview ol { margin-left: 1.5em; margin-bottom: 1em; }
+        #preview li { margin-bottom: 0.5em; }
+        #preview code {
+            font-family: 'JetBrains Mono', monospace;
+            background-color: #f1f5f9;
+            padding: 0.2em 0.4em;
+            font-size: 85%;
+            border-radius: 6px;
+        }
+        #preview pre {
+            background-color: #f1f5f9;
+            padding: 1em;
+            border-radius: 8px;
+            margin-bottom: 1em;
+            overflow-x: auto;
+        }
+        #preview pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        #preview blockquote {
+            border-left: 4px solid #cbd5e1;
+            padding-left: 1em;
+            color: #64748b;
+            margin-left: 0;
+            margin-right: 0;
+            margin-bottom: 1em;
+        }
+        #preview table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1em;
+        }
+        #preview th, #preview td {
+            border: 1px solid #e2e8f0;
+            padding: 0.5em 0.75em;
+        }
+        #preview th {
+            font-weight: 600;
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="h-full antialiased text-gray-800">
+    <div class="flex flex-col min-h-full">
+        <header class="bg-white shadow-sm sticky top-0 z-10">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-3">
+                    <h1 class="text-xl font-semibold text-gray-900">Live Markdown Preview</h1>
+                    <div id="status-indicator" class="flex items-center space-x-2">
+                        <span id="status-dot" class="h-3 w-3 rounded-full bg-gray-400"></span>
+                        <span id="status-text" class="text-sm font-medium text-gray-500">Connecting...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-grow">
+            <div class="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+                <div id="preview" class="prose max-w-none bg-white p-6 sm:p-8 rounded-lg shadow">
+                    <p class="text-gray-500">Waiting for content... Save a <code>.md</code> file in the watched directory to see it rendered here.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const preview = document.getElementById('preview');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+
+        function setStatus(state, message) {
+            const colors = {
+                connected: 'bg-green-500',
+                disconnected: 'bg-red-500',
+                connecting: 'bg-yellow-500 animate-pulse'
+            };
+            statusDot.className = `h-3 w-3 rounded-full ${colors[state] || 'bg-gray-400'}`;
+            statusText.textContent = message;
+        }
+
+        function connect() {
+            // Point the EventSource to your Go server's /events endpoint
+            const eventSource = new EventSource('/events');
+
+            eventSource.onopen = function() {
+                console.log("Connection to server established.");
+                setStatus('connected', 'Live');
+            };
+
+            // This handler is called for every message from the server
+            eventSource.onmessage = function(event) {
+                // event.data contains the HTML string sent from the Go server
+                preview.innerHTML = event.data;
+            };
+
+            // This handler is called on connection error
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                setStatus('disconnected', 'Disconnected');
+                eventSource.close();
+                // Optional: try to reconnect after a delay
+                setTimeout(connect, 3000); 
+            };
+        }
+
+        // Initial connection attempt
+        setStatus('connecting', 'Connecting...');
+        connect();
+    </script>
+</body>
+</html>
